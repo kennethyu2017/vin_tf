@@ -99,14 +99,14 @@ class GridDomainReader(object):
         return x_train, y_train, x_validation, y_validation, x_test, y_test
 
     def batch_train_inputs(self):
-        x_batch = self.x_train[:self.train_sample_idx + self.batch_size]
-        y_batch = self.y_train[:self.train_sample_idx + self.batch_size]
+        x_batch = self.x_train[self.train_sample_idx:self.train_sample_idx + self.batch_size]
+        y_batch = self.y_train[self.train_sample_idx:self.train_sample_idx + self.batch_size]
         self.train_sample_idx = (self.train_sample_idx + self.batch_size) % self.x_train.shape[0]
         return x_batch, y_batch
 
     def batch_validation_inputs(self):
-        x_batch = self.x_validation[:self.validation_sample_idx + self.batch_size]
-        y_batch = self.y_validation[:self.validation_sample_idx + self.batch_size]
+        x_batch = self.x_validation[self.validation_sample_idx:self.validation_sample_idx + self.batch_size]
+        y_batch = self.y_validation[self.validation_sample_idx:self.validation_sample_idx + self.batch_size]
         self.validation_sample_idx = (self.validation_sample_idx + self.batch_size) % self.x_validation.shape[0]
         return x_batch, y_batch
 
