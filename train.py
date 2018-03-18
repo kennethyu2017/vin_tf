@@ -51,8 +51,8 @@ else:
     _flags.DEFINE_integer('summary_freq', 1 * 10000, '')  # 10~min
     _flags.DEFINE_integer('summary_transition_freq', 1 * 10000, '')
     _flags.DEFINE_integer('eval_freq', 3 * 10000, 'eval during training per steps')
-    _flags.DEFINE_integer('num_eval_steps', 2000, 'eval steps')
-    _flags.DEFINE_integer('batch_size', 128, 'batch_size')
+    _flags.DEFINE_integer('num_eval_steps', 1000, 'eval steps')
+    _flags.DEFINE_integer('batch_size', 64, 'batch_size')
     _flags.DEFINE_integer('l_r_decay_freq', 5 * (10 ** 5), 'decay freq')  # 500k
     _flags.DEFINE_string('log_dir', './log_dir', '')
     _flags.DEFINE_string('checkpoint_dir', './chk_pnt', '')
@@ -97,6 +97,7 @@ class CNNModelCfg:
     self.pooling_kernel_sizes= [(2, 2), None, (2, 2), None, None]
     self.pooling_strides= [(2, 2), None, (2, 2), None, None]
     self.conv_activations= [tf.nn.elu] * 5
+    self.conv_dropout_keep_probs = [1, 0.6, 1, 1, 0.6]
     self.conv_initializers= [variance_scaling_initializer()] * 5  # [He] init.
     ###TODO try w/o BN
     # _flags.DEFINE_.conv_normalizers = [batch_norm] * 5
@@ -109,6 +110,7 @@ class CNNModelCfg:
     # -- 2 fc layers including output layer--
     self.n_fc_units= [200, TRAINING_CFG.action_dims]
     self.fc_activations= [tf.nn.elu, None]
+    self.fc_dropout_keep_probs = [0.6, 1]
     self.fc_initializers= [variance_scaling_initializer()] * 2  # [He] init
     self.fc_regularizers= [l2_regularizer(scale=TRAINING_CFG.reg_ratio), None]
     ###TODO try w/o BN
@@ -136,6 +138,8 @@ def train():
     ## track updates.
     global_step_tensor = tf.train.create_global_step()
 
+    is_training = tf.placeholder(tf.bool, shape=())
+
     # dataset
     data_reader = GridDomainReader(TRAINING_CFG.train_data_filename, TRAINING_CFG.test_data_filename,
                                    TRAINING_CFG.im_size,
@@ -159,7 +163,7 @@ def train():
     optimizer = tf.train.AdamOptimizer(learning_rate=l_r)
 
     cnn_model_cfg = CNNModelCfg()
-    model = CNNModel(cnn_model_cfg,optimizer)
+    model = CNNModel(cnn_model_cfg,optimizer,is_training=is_training)
     train_op, loss_mean_tensor = model.create_net(state_inputs, labels, global_step_tensor)
 
     saver = tf.train.Saver(keep_checkpoint_every_n_hours=0.5, max_to_keep=5)
@@ -207,14 +211,16 @@ def train():
             _, summary, loss_mean_value,global_step_value = sess.run(fetches=[train_op, summary_op,
                                              loss_mean_tensor,global_step_tensor],
                                                feed_dict={x_inputs: x_batch,
-                                                          y_inputs: y_batch})
+                                                          y_inputs: y_batch,
+                                                          is_training:True})
 
             summary_writer.add_summary(summary,global_step_value)
             summary_writer.flush()
         else:
             _, loss_mean_value = sess.run(fetches=[train_op, loss_mean_tensor],
                                       feed_dict={x_inputs: x_batch,
-                                                 y_inputs: y_batch})
+                                                 y_inputs: y_batch,
+                                                 is_training:True})
 
         # if step % 2000 == 0:
         if step % 20 == 0:
@@ -230,7 +236,8 @@ def train():
           x_val_batch, y_val_batch = data_reader.batch_validation_inputs()
           return sess.run(fetches=[loss_mean_tensor],
                           feed_dict={x_inputs: x_val_batch,
-                                     y_inputs: y_val_batch})[0]
+                                     y_inputs: y_val_batch,
+                                     is_training:False})[0]
 
         if step % TRAINING_CFG.eval_freq == 0:
           evaluate(TRAINING_CFG.num_eval_steps, estimate_fn,
