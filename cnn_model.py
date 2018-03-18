@@ -4,7 +4,11 @@ Author: kenneth yu
 """
 
 import tensorflow as tf
+<<<<<<< HEAD
 from tensorflow.contrib.layers import conv2d, fully_connected, max_pool2d, dropout
+=======
+from tensorflow.contrib.layers import conv2d, fully_connected, max_pool2d
+>>>>>>> 8511a0cd1715de2605be82941d5ff529a74c1d7e
 
 '''
 normal structure for each conv layer:conv -> elu -> bn -> pooling.
@@ -38,11 +42,18 @@ TRAINING_CFG = tf.app.flags.FLAGS  # alias
 
 class CNNModel:
 
+<<<<<<< HEAD
     def __init__(self, cnn_model_cfg,optimizer,is_training, scope="cnn_model"):
         self.cnn_model_cfg = cnn_model_cfg
         self.optimizer = optimizer
         self.scope = scope
         self.is_training = is_training
+=======
+    def __init__(self, cnn_model_cfg,optimizer, scope="cnn_model"):
+        self.cnn_model_cfg = cnn_model_cfg
+        self.optimizer = optimizer
+        self.scope = scope
+>>>>>>> 8511a0cd1715de2605be82941d5ff529a74c1d7e
 
     def create_net(self, state_inputs, labels, global_step_tensor):
         """
@@ -60,13 +71,21 @@ class CNNModel:
             # conv layers
             # TODO add batch_norm to input process.
             for (n_maps, kernel_size, stride, padding, activation, initializer, normalizer, norm_param,
+<<<<<<< HEAD
                  regularizer, pooling_kernel_size, pooling_stride, keep_prob) in \
+=======
+                 regularizer, pooling_kernel_size, pooling_stride) in \
+>>>>>>> 8511a0cd1715de2605be82941d5ff529a74c1d7e
                 zip(
                 self.cnn_model_cfg.conv_n_feature_maps, self.cnn_model_cfg.conv_kernel_sizes,
                 self.cnn_model_cfg.conv_strides, self.cnn_model_cfg.conv_paddings, self.cnn_model_cfg.conv_activations,
                 self.cnn_model_cfg.conv_initializers, self.cnn_model_cfg.conv_normalizers, self.cnn_model_cfg.conv_norm_params,
+<<<<<<< HEAD
                 self.cnn_model_cfg.conv_regularizers, self.cnn_model_cfg.pooling_kernel_sizes, self.cnn_model_cfg.pooling_strides,
                 self.cnn_model_cfg.conv_dropout_keep_probs):
+=======
+                self.cnn_model_cfg.conv_regularizers, self.cnn_model_cfg.pooling_kernel_sizes, self.cnn_model_cfg.pooling_strides):
+>>>>>>> 8511a0cd1715de2605be82941d5ff529a74c1d7e
                 prev_layer = conv2d(prev_layer, num_outputs=n_maps, kernel_size=kernel_size,
                                     stride=stride, padding=padding,
                                     activation_fn=activation,
@@ -80,18 +99,27 @@ class CNNModel:
                     # max pooling only
                     prev_layer = max_pool2d(prev_layer, pooling_kernel_size, pooling_stride,
                                             padding='VALID', data_format='NHWC')
+<<<<<<< HEAD
                 if keep_prob < 1:
                     prev_layer = dropout(prev_layer, keep_prob,is_training=self.is_training)
+=======
+>>>>>>> 8511a0cd1715de2605be82941d5ff529a74c1d7e
                 conv_layers.append(prev_layer)
 
             ##fc layers.inc output layer.
             # flatten the output of last conv layer to (batch_size, n_fc_in)
             prev_layer = tf.reshape(conv_layers[-1], shape=[-1,conv_layers[-1].shape[1] * conv_layers[-1].shape[2] * conv_layers[-1].shape[3]])
+<<<<<<< HEAD
             for n_unit, activation, initializer, normalizer, norm_param, regularizer,keep_prob \
                     in zip(
                     self.cnn_model_cfg.n_fc_units, self.cnn_model_cfg.fc_activations, self.cnn_model_cfg.fc_initializers,
                     self.cnn_model_cfg.fc_normalizers, self.cnn_model_cfg.fc_norm_params, self.cnn_model_cfg.fc_regularizers,
                     self.cnn_model_cfg.fc_dropout_keep_probs):
+=======
+            for n_unit, activation, initializer, normalizer, norm_param, regularizer in zip(
+                    self.cnn_model_cfg.n_fc_units, self.cnn_model_cfg.fc_activations, self.cnn_model_cfg.fc_initializers,
+                    self.cnn_model_cfg.fc_normalizers, self.cnn_model_cfg.fc_norm_params, self.cnn_model_cfg.fc_regularizers):
+>>>>>>> 8511a0cd1715de2605be82941d5ff529a74c1d7e
                 prev_layer = fully_connected(prev_layer, num_outputs=n_unit,
                                              activation_fn=activation,
                                              weights_initializer=initializer,
@@ -99,8 +127,11 @@ class CNNModel:
                                              normalizer_params=norm_param,
                                              weights_regularizer=regularizer,
                                              trainable=True)
+<<<<<<< HEAD
                 if keep_prob < 1:
                     prev_layer = dropout(prev_layer, keep_prob, is_training=self.is_training)
+=======
+>>>>>>> 8511a0cd1715de2605be82941d5ff529a74c1d7e
                 fc_layers.append(prev_layer)
 
             # logits should be [batch_size, num_action]
