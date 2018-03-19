@@ -7,6 +7,7 @@ import tensorflow as tf
 from scipy import io as sio
 import numpy as np
 import matplotlib.pyplot as plt
+import pickle as pkl
 
 # NUM_CLASSES = cnn_model_cfg.action_dims
 # NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 50000
@@ -14,6 +15,22 @@ import matplotlib.pyplot as plt
 
 TRAINING_CFG = tf.app.flags.FLAGS
 
+action_rc_diff = [
+            [-1, 0],  #N
+            [1, 0],   #S
+            [0, 1],
+            [0, -1],
+            [-1, 1],  #NE
+            [-1, -1], #NW
+            [1, 1],  #SE
+            [1, -1]]  #SW
+
+
+class TrajectoryRecord(object):
+    def __init__(self,im, trajectory_rc, goal_rc):
+        self.im = im   # grid img
+        self.trajectory_rc = trajectory_rc   # [row, col] sequences of one trajectory
+        self.goal_rc = goal_rc   # goal pos
 
 class GridDomainReader(object):
     def __init__(self, train_filename, test_filename, im_size, batch_size, random_show=False):
@@ -53,7 +70,7 @@ class GridDomainReader(object):
         value_data = matlab_data["value_data"][:1000]  # goal is 10, other is 0.
         # state1_data = matlab_data["state_x_data"]  # flattened x pos
         # state2_data = matlab_data["state_y_data"][:1000]  # flattened y pos
-        state_xy_data = matlab_data['state_xy_data'][:1000] # xy coordinate of each sample. start from 0.
+        state_rc_data = matlab_data['state_xy_data'][:1000] # rc coordinate of each sample. start from 0.
         # label_data is idx action.
         y_data = matlab_data["label_data"][:1000]
         y_data=y_data.squeeze()
@@ -68,8 +85,12 @@ class GridDomainReader(object):
 
         state_data = np.zeros_like(im_data,'int8')
         for i in range(state_data.shape[0]):  # num_samples
-            state_data[i, state_xy_data[i][0], state_xy_data[i][1]] = 1  # set position as value 1 for each sample
+            state_data[i, state_rc_data[i][0], state_rc_data[i][1]] = 1  # set position as value 1 for each sample
         state_data = state_data.astype('int8')
+```````````
+        # save trajectories through pickle file
+        self.save_trajectories(im_data,value_data, state_rc_data, './traj_data/saved_traj.pkl')
+
         # stack img + val + state(curr pos) along axis 1.
         # x_data shape [num_samples, h, w, 3] to comply with conv2d NHWC format.
         x_data = np.stack((im_data, value_data, state_data), axis=-1)
@@ -114,6 +135,21 @@ class GridDomainReader(object):
     def test_input(self):
         pass
 
+    @staticmethod
+    def neighbour_states(state1, state2):
+        return (state1 - state2).tolist() in action_rc_diff
+
+    @staticmethod
+    def get_goal_rc(value):
+        # NOTE: in matlab, x->row, y->col.
+        goal_rc = np.argwhere(value == 10)[0]  # row, col of goal.
+        return goal_rc # coordinate of matplot, y->ndarray row, x->ndarray col.
+
+    @staticmethod
+    def get_state_rc(state):
+        state_rc = np.argwhere(state == 1)[0]  # row, col of curr pos.
+        return state_rc
+
     def sample_data_and_show(self,datas, labels,title):
         sample_idx = np.random.randint(0, datas.shape[0])
         [im, value, state] = np.split(datas[sample_idx], 3, axis=-1)
@@ -122,22 +158,11 @@ class GridDomainReader(object):
         value = np.squeeze(value)
         state = np.squeeze(state)
 
-        goal_rc = np.argwhere(value==10)[0] # row, col of goal.
-        goal_y, goal_x = goal_rc[0],goal_rc[1] # coordinate of matplot, y->ndarray row, x->ndarray col.
+        goal_y, goal_x = self.get_goal_rc(value) # coordinate of matplot, y->ndarray row, x->ndarray col.
                                               #NOTE: in matlab, x->row, y->col.
-        state_rc = np.argwhere(state==1)[0] # row, col of curr pos.
-        state_y, state_x = state_rc[0], state_rc[1]
+        state_y, state_x = self.get_state_rc(state)
 
         action_label = labels[sample_idx]
-        action_rc_diff = [
-            [-1, 0],  #N
-            [1, 0],   #S
-            [0, 1],
-            [0, -1],
-            [-1, 1],  #NE
-            [-1, -1], #NW
-            [1, 1],  #SE
-            [1, -1]]  #SW
         next_state_rc = action_rc_diff[action_label] + state_rc
         next_state_y, next_state_x = next_state_rc[0],next_state_rc[1]
 
@@ -153,7 +178,49 @@ class GridDomainReader(object):
         self.sample_data_and_show(self.x_train, self.y_train,'train sample')
         self.sample_data_and_show(self.x_validation, self.y_validation, 'validation sample')
 
+    def save_trajectories(self, im_data, value_data, state_rc_data,filename):
+        # we re-organize the state data
+        # im_data shape :[num_samples, h, w]
+        curr_traj = None
+        new_traj = True
+        curr_goal = np.array([])
+        f = open(filename,'wb')
+        for idx in range(im_data.shape[0]):
+            curr_state = np.reshape(state_rc_data[idx],[1,-1])  # add 1 dim
+            # fetch goal from value data
+            if new_traj:
+                curr_goal = self.get_goal_rc(value_data[idx])
+                curr_traj = curr_state
+                new_traj = False
+            else:
+                curr_traj = np.append(curr_traj, curr_state, axis=0)
+            # arrive goal. the state_rc will never be equal with goal_rc.
+            if self.neighbour_states(curr_state.squeeze(), curr_goal.squeeze()):
+                record = TrajectoryRecord(im_data[idx],curr_traj, curr_goal)
+                pkl.dump(record,f)
+                new_traj = True
+                curr_traj = np.array([[]])
+        f.close()
 
+    def load_and_show_trajectories(self, filename ):
+        f = open(filename,'rb')
+        while True:
+            traj_record = None
+            try:
+                traj_record = pkl.load(f)
+                im, traj, goal = traj_record.im, traj_record.trajectory_rc, traj_record.goal_rc
+                plt.figure(1)
+                plt.imshow(im, cmap=plt.cm.gray)
+                #plot goal
+                plt.plot(goal[1], goal[0], 'go')  # in pyplot, row -> plot coord-y.
+                rows = traj[:,0]
+                cols = traj[:,1]
+                #plot start point
+                plt.plot(cols[0], row[0], 'bs')
+                plt.plot(cols, rows, '-rx')
+                plt.show(1)
+            except: break
+        f.close()
 #
 # def read_grid_domain_files(filename_queue):
 #
@@ -266,5 +333,6 @@ class GridDomainReader(object):
 if __name__ == '__main__':
     reader = GridDomainReader('./data/gridworld_28.mat','./data/gridworld_28_test.mat',
                               [28,28],128)
-    reader.show_train_validation()
+    # reader.show_train_validation()
+    reader.load_and_show_trajectories('./traj_data/saved_traj.pkl')
 
