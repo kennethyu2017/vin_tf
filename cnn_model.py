@@ -108,6 +108,7 @@ class CNNModel:
 
             reg_loss = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
             cross_entropy_loss = tf.losses.sparse_softmax_cross_entropy(labels, logits)
+            predicted_classes = tf.argmax(logits, axis=1)
             total_loss = tf.add_n(reg_loss + [cross_entropy_loss], name='total_loss')
             train_op = self.optimizer.minimize(total_loss, global_step_tensor)
 
@@ -123,4 +124,4 @@ class CNNModel:
             #                       collections=[self.cnn_model_cfg.actor_summary_keys])
 
         # == end with variable_scope() ==
-        return train_op, total_loss
+        return train_op, total_loss, predicted_classes
