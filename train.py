@@ -12,7 +12,7 @@ import pickle as pkl
 import matplotlib.pyplot as plt
 from tensorflow.contrib.layers import variance_scaling_initializer, l2_regularizer
 from cnn_model import CNNModel
-from input import GridDomainReader, TRAJ_DATA_FILENAME, action_rc_diff
+from input import GridDomainReader, TRAJ_TRAIN_DATA_FILENAME,TRAJ_TEST_DATA_FILENAME, action_rc_diff
 
 TRAINING_CFG = tf.app.flags.FLAGS  # alias
 _flags = tf.app.flags
@@ -320,7 +320,7 @@ class Trainer(object):
 		                                self.is_training: False
 		                                })
 
-	def predict_and_show(self, filename=TRAJ_DATA_FILENAME):
+	def predict_and_show(self, filename=TRAJ_TEST_DATA_FILENAME):
 		"""
 		predict and compare with expert data.
 		:param filename:
@@ -370,12 +370,13 @@ class Trainer(object):
 			# TODO calc diff
 			plt.figure(1)
 			plt.imshow(im, cmap=plt.cm.gray)
-			plt.plot(expert_traj[:, 1], expert_traj[:, 0], '-bx')
-			plt.plot(pred_traj[:, 1], pred_traj[:, 0], '-rx')
-			plt.legend(['expert path:', 'predict path:'])
+			plt.plot(expert_traj[:, 1], expert_traj[:, 0],label = 'expert path',color='blue',marker='x',linewidth=1)
+			plt.plot(pred_traj[:, 1], pred_traj[:, 0], label='predict path',color='red', marker = '*',linewidth=1)
+			# plt.legend(['expert path:', 'predict path:'])
 			# plot goal
-			plt.plot(goal_rc[1], goal_rc[0], 'go')  # in pyplot, row -> plot coord-y.
-			plt.plot(expert_traj[0][1], expert_traj[0][0], 'bs')  # start point
+			plt.plot(goal_rc[1], goal_rc[0], label='goal', color='green',marker='o')  # in pyplot, row -> plot coord-y.
+			plt.plot(expert_traj[0][1], expert_traj[0][0], label='start',color='blue',marker='s')  # start point
+			plt.legend()
 			plt.show(1)
 
 		f.close()

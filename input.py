@@ -14,7 +14,8 @@ import pickle as pkl
 # NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 10000
 
 TRAINING_CFG = tf.app.flags.FLAGS
-TRAJ_DATA_FILENAME = './traj_data/saved_traj.pkl'
+TRAJ_TRAIN_DATA_FILENAME = './traj_data/saved_train_traj.pkl'
+TRAJ_TEST_DATA_FILENAME = './traj_data/saved_test_traj.pkl'
 
 action_rc_diff = [
 			[-1, 0],  #N
@@ -64,8 +65,8 @@ class GridDomainReader(object):
 		state = np.zeros_like(im, 'int8')
 		value = np.zeros_like(im, 'int8')
 		for i in range(im.shape[0]):
-		  state[i, state_rc[i][0], state_rc[i][1]] = 1  # set position as 1
-		  value[i, goal_rc[i][0], goal_rc[i][1]] = 10  # set position as 10
+			state[i, state_rc[i][0], state_rc[i][1]] = 1  # set position as 1
+			value[i, goal_rc[i][0], goal_rc[i][1]] = 10  # set position as 10
 
 		# stack img + val + state(curr pos) along new axis.
 		# x_data shape [num_samples, h, w, 3] to comply with conv2d NHWC format.
@@ -103,8 +104,10 @@ class GridDomainReader(object):
 		# reshape img value(prior,: 10@goal and -1@others) from flatten to [num_samples, h, w]
 		value_data = value_data.reshape((-1, im_size[0], im_size[1]))
 
+		#TODO read test data and save traj.
 		# save trajectories through pickle file
-		self.save_trajectories(im_data,value_data, state_rc_data,TRAJ_DATA_FILENAME)
+		# self.save_trajectories(im_data,value_data, state_rc_data,TRAJ_TRAIN_DATA_FILENAME)
+		self.save_test_trajectories(test_filename,im_size,TRAJ_TEST_DATA_FILENAME)
 
 		state_data = np.zeros_like(im_data, 'int8')
 		for i in range(state_data.shape[0]):  # num_samples
@@ -120,6 +123,7 @@ class GridDomainReader(object):
 		num_train = int(6/7.0 * x_data.shape[0])
 		# x_test = x_data[num_train + num_validation:]
 		# y_test = y_data[num_train + num_validation:]
+
 
 		# shuffle training and validation data
 		shuffle_idx = np.random.permutation(x_data.shape[0])
@@ -204,6 +208,7 @@ class GridDomainReader(object):
 		curr_traj = None
 		new_traj = True
 		curr_goal = np.array([])
+		#TODO: glob.glob to judge whether the file already exist.
 		f = open(filename,'wb')
 		for idx in range(im_data.shape[0]):
 			curr_state = np.reshape(state_rc_data[idx],[1,-1])  # add 1 dim
@@ -222,8 +227,37 @@ class GridDomainReader(object):
 				curr_traj = np.array([[]])
 		f.close()
 
+	def save_test_trajectories(self,test_filename,im_size,save_filename):
+		tf.logging.info('@@@ save trajectories into file:{}'.format(save_filename))
+		# TODO split mat files and use input queues.
+		matlab_data = sio.loadmat(test_filename)  # from matlab uint8 dtype.
+
+		im_data = matlab_data["all_im_data"][:8]
+		# TODO: normalize will kill precise position information?
+		# im_data = (im_data - 1) / 255  # obstacles = 1, free zone = 0
+		im_data = 1 - im_data  # make obstacles = 1, free zone = 0  # in matlab 0:obstacle and border,black color. 1: free space,white color.
+
+		value_data = matlab_data["all_value_data"][:8]  # goal is 10, other is 0.
+		state_rc_data = matlab_data['all_states_xy'][:8]  # rc coordinate of each sample. start from 0.
+
+		del matlab_data
+
+		# reshape img data from flatten to [num_samples, h, w]
+		im_data = im_data.reshape((-1, im_size[0], im_size[1]))
+		# reshape img value(prior,: 10@goal and -1@others) from flatten to [num_samples, h, w]
+		value_data = value_data.reshape((-1, im_size[0], im_size[1]))
+
+		#TODO: glob.glob to judge whether the file already exist.
+		f = open(save_filename,'wb')
+		for idx in range(im_data.shape[0]):
+			curr_goal = self.get_goal_rc(value_data[idx])
+			curr_traj = state_rc_data[idx][0]
+			record = TrajectoryRecord(im_data[idx],curr_traj, curr_goal)
+			pkl.dump(record,f)
+		f.close()
+
 	@staticmethod
-	def load_and_show_trajectories(filename=TRAJ_DATA_FILENAME):
+	def load_and_show_trajectories(filename=TRAJ_TEST_DATA_FILENAME):
 		f = open(filename,'rb')
 		while True:
 			try:
