@@ -238,7 +238,7 @@ class GridDomainReader(object):
 		im_data = 1 - im_data  # make obstacles = 1, free zone = 0  # in matlab 0:obstacle and border,black color. 1: free space,white color.
 
 		value_data = matlab_data["all_value_data"][:8]  # goal is 10, other is 0.
-		state_rc_data = matlab_data['all_states_xy'][:8]  # rc coordinate of each sample. start from 0.
+		state_cr_data = matlab_data['all_states_xy'][:8]  # cr coordinate of each sample. start from 0.
 
 		del matlab_data
 
@@ -251,7 +251,10 @@ class GridDomainReader(object):
 		f = open(save_filename,'wb')
 		for idx in range(im_data.shape[0]):
 			curr_goal = self.get_goal_rc(value_data[idx])
-			curr_traj = state_rc_data[idx][0]
+			curr_traj = np.zeros_like(state_cr_data[idx][0])
+			# make [col,row] to [row, col]
+			curr_traj[:,0] = state_cr_data[idx][0][:, 1] - 1 # bias matlab array starting from 1.
+			curr_traj[:,1] = state_cr_data[idx][0][:, 0] - 1
 			record = TrajectoryRecord(im_data[idx],curr_traj, curr_goal)
 			pkl.dump(record,f)
 		f.close()
